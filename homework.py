@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import time
 from http import HTTPStatus
 
@@ -34,18 +35,16 @@ formatter = logging.Formatter(
 handler = logging.StreamHandler()
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-old_message = ''
 
 
 def check_tokens():
     """Проверка доступности переменных окружения."""
-    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        logger.critical('Ошибка импорта токенов Telegram.')
-        return False
-    elif not PRACTICUM_TOKEN:
-        raise SystemError('Ошибка импорта токенов Домашки.')
-    else:
-        return True
+    logger.critical('Ошибка импорта токенов Telegram.')
+    return all([
+        PRACTICUM_TOKEN,
+        TELEGRAM_TOKEN,
+        TELEGRAM_CHAT_ID
+    ])
 
 
 def send_message(bot, message):
@@ -66,9 +65,9 @@ def get_api_answer(current_timestamp):
         'headers': HEADERS,
         'params': params
     }
+    logger.info(f"Запрос к эндпоинту '{ENDPOINT}' API-сервиса c "
+                f"параметрами {requests_params}")
     try:
-        logger.info(f"Запрос к эндпоинту '{ENDPOINT}' API-сервиса c "
-                    f"параметрами {requests_params}")
         response = requests.get(**requests_params)
         if response.status_code != HTTPStatus.OK:
             message = (f"Сбой в работе программы: Эндпоинт {ENDPOINT} c "
@@ -120,27 +119,23 @@ def parse_status(homework):
 
 def main():
     """Основная логика работы бота."""
-    global old_message
+    old_message = ''
     if not check_tokens():
-        raise SystemExit('Токен указан неверно')
+        message = 'Отсутствуют необходимые переменные окружения'
+        logger.critical(message)
+        sys.exit()
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
 
     while True:
         try:
-            if type(current_timestamp) is not int:
-                raise SystemError('В функцию передана не дата')
             response = get_api_answer(current_timestamp)
-            response = check_response(response)
-
-            if len(response) > 0:
-                homework_status = parse_status(response[0])
-                if homework_status is not None:
-                    send_message(bot, homework_status)
-            else:
-                logger.debug('нет новых статусов')
-
+            homeworks = check_response(response)
+            for homework in homeworks:
+                verdict_status = parse_status(homework)
+                if verdict_status is not None:
+                    send_message(bot, verdict_status)
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
