@@ -39,7 +39,6 @@ logger.addHandler(handler)
 
 def check_tokens():
     """Проверка доступности переменных окружения."""
-    logger.critical('Ошибка импорта токенов Telegram.')
     return all([
         PRACTICUM_TOKEN,
         TELEGRAM_TOKEN,
@@ -134,8 +133,9 @@ def main():
             homeworks = check_response(response)
             for homework in homeworks:
                 verdict_status = parse_status(homework)
-                if verdict_status is not None:
+                if verdict_status != old_message:
                     send_message(bot, verdict_status)
+                    old_message = verdict_status
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
